@@ -3,16 +3,25 @@ import { initSolarSystem } from './scene.js';
 import { setupGesture } from './gesture.js';
 
 // ── KHỞI TẠO SCENE ────────────────────────────────────────────
-const { scene, camera, renderer, controls, sun, composer, planetMeshes } = initSolarSystem();
+const { scene, camera, renderer, controls, composer, planetMeshes } = initSolarSystem();
 
-const selectables = [...planetMeshes.map(p => p.mesh), sun];
+// Mặt trời cố định — không nằm trong danh sách chọn được
+const selectables = planetMeshes.map(p => p.mesh);
+
+// Quỹ đạo: dist (bán kính) + speed (tốc độ, rad/s) — dùng để snap
+const ORBITS = planetMeshes.map(p => ({ dist: p.data.dist, speed: p.data.speed }));
+
+// Gán tốc độ quỹ đạo ban đầu cho từng hành tinh
+planetMeshes.forEach(p => { p.orbitSpeed = p.data.speed; });
+
+const clock = new THREE.Clock();
 
 // ── DRAG STATE ────────────────────────────────────────────────
 const raycaster = new THREE.Raycaster();
 
 let selectedMesh = null;
 let isDragging   = false;
-let lastDragX    = null; // tọa độ tay frame trước (0–1)
+let lastDragX    = null;
 let lastDragY    = null;
 
 function toNDC(x, y) {
@@ -35,8 +44,7 @@ function trySelect(handX, handY) {
 
 function startDrag() {
   if (!selectedMesh) return;
-
-  // Tách khỏi pivot để di chuyển tự do
+  // Tách khỏi pivot để di chuyển tự do trong scene
   if (selectedMesh.parent !== scene) {
     const worldPos = new THREE.Vector3();
     selectedMesh.getWorldPosition(worldPos);
@@ -44,47 +52,65 @@ function startDrag() {
     scene.add(selectedMesh);
     selectedMesh.position.copy(worldPos);
   }
-
   lastDragX = lastDragY = null;
   isDragging = true;
 }
 
 function applyDrag(handX, handY) {
   if (!selectedMesh || !isDragging) return;
-
-  // Frame đầu tiên: chỉ ghi nhận vị trí, chưa di chuyển
-  if (lastDragX === null) {
-    lastDragX = handX;
-    lastDragY = handY;
-    return;
-  }
+  if (lastDragX === null) { lastDragX = handX; lastDragY = handY; return; }
 
   const dx = handX - lastDragX;
   const dy = handY - lastDragY;
   lastDragX = handX;
   lastDragY = handY;
 
-  // Camera right và up trong world space
   const right  = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
   const up     = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
 
-  // Projected depth: khoảng cách vuông góc từ camera plane đến object
-  // (giống Blender grab) — không đổi khi object di ngang → scale ổn định
+  // Projected depth → scale ổn định khi object di ngang (giống Blender)
   const dist  = camDir.dot(selectedMesh.position.clone().sub(camera.position));
   const scale = dist * 2 * Math.tan((camera.fov * Math.PI / 180) / 2);
 
-  // dx âm vì tọa độ tay đã được mirror (scaleX(-1) trên video)
   selectedMesh.position.addScaledVector(right, -dx * scale * camera.aspect);
   selectedMesh.position.addScaledVector(up,    -dy * scale);
 }
 
+// ── SNAP VỀ QUỸ ĐẠO GẦN NHẤT ────────────────────────────────
+function snapToNearestOrbit(planetEntry) {
+  const { mesh, pivot } = planetEntry;
+
+  // Vị trí world hiện tại của hành tinh
+  const wPos = new THREE.Vector3();
+  mesh.getWorldPosition(wPos);
+
+  // Khoảng cách XZ từ gốc tọa độ (mặt trời)
+  const currentR = Math.sqrt(wPos.x * wPos.x + wPos.z * wPos.z);
+
+  // Tìm quỹ đạo có bán kính gần nhất
+  const nearest = ORBITS.reduce((best, o) =>
+    Math.abs(o.dist - currentR) < Math.abs(best.dist - currentR) ? o : best
+  );
+
+  // Reparent về pivot của chính hành tinh đó
+  scene.remove(mesh);
+  pivot.add(mesh);
+
+  // Căn chỉnh góc pivot theo hướng XZ hiện tại, snap distance về quỹ đạo
+  pivot.rotation.y = Math.atan2(-wPos.z, wPos.x);
+  mesh.position.set(nearest.dist, 0, 0); // về mặt phẳng quỹ đạo (y=0)
+
+  // Gán tốc độ của quỹ đạo mới
+  planetEntry.orbitSpeed = nearest.speed;
+}
+
 function stopDrag() {
   highlight(selectedMesh, false);
-  isDragging = false;
+  isDragging   = false;
   selectedMesh = null;
-  lastDragX = lastDragY = null;
+  lastDragX    = lastDragY = null;
 }
 
 // ── XỬ LÝ LỆNH CỬ CHỈ ────────────────────────────────────────
@@ -122,9 +148,14 @@ window.onGestureCommand = function(cmd) {
       applyDrag(cmd.x, cmd.y);
       break;
 
-    case 'DRAG_END':
+    case 'DRAG_END': {
+      if (isDragging && selectedMesh) {
+        const entry = planetMeshes.find(p => p.mesh === selectedMesh);
+        if (entry) snapToNearestOrbit(entry);
+      }
       stopDrag();
       break;
+    }
   }
 };
 
@@ -155,7 +186,6 @@ const DOT_COLOR = [
 window.drawLandmarks = function(hands) {
   ctx.clearRect(0, 0, overlay.width, overlay.height);
   if (!hands?.length) return;
-
   for (const lm of hands) {
     ctx.strokeStyle = 'rgba(150,150,255,0.5)';
     ctx.lineWidth   = 1.5;
@@ -185,6 +215,17 @@ window.drawLandmarks = function(hands) {
 // ── VÒNG LẶP RENDER ───────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+
+  // Cập nhật quỹ đạo cho tất cả hành tinh trừ hành tinh đang kéo
+  const dragging = isDragging ? planetMeshes.find(p => p.mesh === selectedMesh) : null;
+  for (const p of planetMeshes) {
+    if (p !== dragging) {
+      p.pivot.rotation.y += p.orbitSpeed * delta;
+    }
+  }
+
   controls.update();
   composer.render();
 }

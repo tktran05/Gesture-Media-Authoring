@@ -97,15 +97,16 @@ export function initSolarSystem() {
   sun.add(lensflare);
 
   // ── PLANETS ────────────────────────────────────────────────
+  // speed: tốc độ quỹ đạo (rad/s) — tỉ lệ Kepler: gần mặt trời = nhanh hơn
   const PLANETS = [
-    { name: 'Mercury', size: 0.5,  dist: 8,  initialAngle: 2.1,  texture: 'mercury.jpg', roughness: 1,    metalness: 0.02 },
-    { name: 'Venus',   size: 0.9,  dist: 11, initialAngle: 4.8,  texture: 'venus.jpg',   roughness: 0.6,  metalness: 0.05 },
-    { name: 'Earth',   size: 1,    dist: 15, initialAngle: 3.45, texture: 'earth.jpg',   roughness: 0.5,  metalness: 0.01 },
-    { name: 'Mars',    size: 0.8,  dist: 19, initialAngle: 0.9,  texture: 'mars.jpg',    roughness: 0.75, metalness: 0.02 },
-    { name: 'Jupiter', size: 2,    dist: 25, initialAngle: 2.7,  texture: 'jupiter.jpg', roughness: 0.9,  metalness: 0.0  },
-    { name: 'Saturn',  size: 1.7,  dist: 31, initialAngle: 5.8,  texture: 'saturn.jpg',  roughness: 0.9,  metalness: 0.0, hasRings: true },
-    { name: 'Uranus',  size: 1.2,  dist: 37, initialAngle: 1.2,  texture: 'uranus.jpg',  roughness: 0.85, metalness: 0.0 },
-    { name: 'Neptune', size: 1.1,  dist: 42, initialAngle: 6.1,  texture: 'neptune.jpg', roughness: 0.85, metalness: 0.0 },
+    { name: 'Mercury', size: 0.5,  dist: 8,  speed: 0.80, initialAngle: 2.1,  texture: 'mercury.jpg', roughness: 1,    metalness: 0.02 },
+    { name: 'Venus',   size: 0.9,  dist: 11, speed: 0.50, initialAngle: 4.8,  texture: 'venus.jpg',   roughness: 0.6,  metalness: 0.05 },
+    { name: 'Earth',   size: 1,    dist: 15, speed: 0.40, initialAngle: 3.45, texture: 'earth.jpg',   roughness: 0.5,  metalness: 0.01 },
+    { name: 'Mars',    size: 0.8,  dist: 19, speed: 0.30, initialAngle: 0.9,  texture: 'mars.jpg',    roughness: 0.75, metalness: 0.02 },
+    { name: 'Jupiter', size: 2,    dist: 25, speed: 0.20, initialAngle: 2.7,  texture: 'jupiter.jpg', roughness: 0.9,  metalness: 0.0  },
+    { name: 'Saturn',  size: 1.7,  dist: 31, speed: 0.15, initialAngle: 5.8,  texture: 'saturn.jpg',  roughness: 0.9,  metalness: 0.0, hasRings: true },
+    { name: 'Uranus',  size: 1.2,  dist: 37, speed: 0.10, initialAngle: 1.2,  texture: 'uranus.jpg',  roughness: 0.85, metalness: 0.0 },
+    { name: 'Neptune', size: 1.1,  dist: 42, speed: 0.08, initialAngle: 6.1,  texture: 'neptune.jpg', roughness: 0.85, metalness: 0.0 },
   ];
 
   const planetMeshes = [];
