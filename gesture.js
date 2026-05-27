@@ -8,7 +8,7 @@ const PINCH_ENTER = 0.060;  // khoảng cách để BẮT ĐẦU pinch
 const PINCH_EXIT  = 0.115;  // khoảng cách để KẾT THÚC pinch (rộng hơn → bám chắc hơn)
 
 // Số frame không-pinch liên tiếp cần thiết để thực sự kết thúc drag
-const DRAG_EXIT_FRAMES = 5;
+const DRAG_EXIT_FRAMES = 2;
 
 // ── DETECTORS ──────────────────────────────────────────────────
 function pinchDist(lm) {
