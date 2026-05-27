@@ -6,19 +6,10 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; overflow: hidden; }
-    canvas { display: block; position: relative; z-index: 1; }
+    canvas { display: block; }
 
-    /* Webcam toàn màn hình, phía sau scene 3D */
-    #webcam {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      opacity: 0.25;        /* ← chỉnh độ mờ tại đây (0 = ẩn, 1 = rõ) */
-      transform: scaleX(-1); /* mirror cho tự nhiên */
-      z-index: 9;
-    }
+    /* Webcam ẩn hoàn toàn — vẫn chạy để MediaPipe nhận diện tay */
+    #webcam { display: none; }
 
     /* Canvas vẽ landmark bàn tay */
     #overlay {
