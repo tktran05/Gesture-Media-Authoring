@@ -5,19 +5,16 @@ import { setupGesture } from './gesture.js';
 // ── KHỞI TẠO SCENE ────────────────────────────────────────────
 const { scene, camera, renderer, controls, sun, composer, planetMeshes } = initSolarSystem();
 
-// Danh sách object có thể chọn: hành tinh + mặt trời
 const selectables = [...planetMeshes.map(p => p.mesh), sun];
 
 // ── DRAG STATE ────────────────────────────────────────────────
-const raycaster    = new THREE.Raycaster();
-const dragPlane    = new THREE.Plane();
-const dragNormal   = new THREE.Vector3();
-const dragTarget   = new THREE.Vector3(); // vị trí đích (cập nhật mỗi frame tay)
+const raycaster = new THREE.Raycaster();
 
 let selectedMesh = null;
 let isDragging   = false;
+let lastDragX    = null; // tọa độ tay frame trước (0–1)
+let lastDragY    = null;
 
-// Chuyển tọa độ tay (0–1, đã mirror) sang NDC Three.js (–1 đến 1)
 function toNDC(x, y) {
   return new THREE.Vector2((1 - x) * 2 - 1, -(y * 2 - 1));
 }
@@ -39,7 +36,7 @@ function trySelect(handX, handY) {
 function startDrag() {
   if (!selectedMesh) return;
 
-  // Reparent về scene để di chuyển tự do trong không gian thế giới
+  // Tách khỏi pivot để di chuyển tự do
   if (selectedMesh.parent !== scene) {
     const worldPos = new THREE.Vector3();
     selectedMesh.getWorldPosition(worldPos);
@@ -48,30 +45,46 @@ function startDrag() {
     selectedMesh.position.copy(worldPos);
   }
 
-  // Khởi tạo dragTarget tại vị trí hiện tại để không bị giật lúc bắt đầu
-  dragTarget.copy(selectedMesh.position);
-
-  // Mặt phẳng kéo thả vuông góc với hướng camera, đi qua object
-  camera.getWorldDirection(dragNormal);
-  dragPlane.setFromNormalAndCoplanarPoint(dragNormal, selectedMesh.position);
+  lastDragX = lastDragY = null;
   isDragging = true;
 }
 
 function applyDrag(handX, handY) {
   if (!selectedMesh || !isDragging) return;
-  raycaster.setFromCamera(toNDC(handX, handY), camera);
 
-  // Cập nhật vị trí đích — object sẽ lerp tới đây trong animate()
-  const hit = new THREE.Vector3();
-  if (raycaster.ray.intersectPlane(dragPlane, hit)) {
-    dragTarget.copy(hit);
+  // Frame đầu tiên: chỉ ghi nhận vị trí, chưa di chuyển
+  if (lastDragX === null) {
+    lastDragX = handX;
+    lastDragY = handY;
+    return;
   }
+
+  const dx = handX - lastDragX;
+  const dy = handY - lastDragY;
+  lastDragX = handX;
+  lastDragY = handY;
+
+  // Camera right và up trong world space
+  const right  = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  const up     = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+
+  // Projected depth: khoảng cách vuông góc từ camera plane đến object
+  // (giống Blender grab) — không đổi khi object di ngang → scale ổn định
+  const dist  = camDir.dot(selectedMesh.position.clone().sub(camera.position));
+  const scale = dist * 2 * Math.tan((camera.fov * Math.PI / 180) / 2);
+
+  // dx âm vì tọa độ tay đã được mirror (scaleX(-1) trên video)
+  selectedMesh.position.addScaledVector(right, -dx * scale * camera.aspect);
+  selectedMesh.position.addScaledVector(up,    -dy * scale);
 }
 
 function stopDrag() {
   highlight(selectedMesh, false);
-  isDragging   = false;
+  isDragging = false;
   selectedMesh = null;
+  lastDragX = lastDragY = null;
 }
 
 // ── XỬ LÝ LỆNH CỬ CHỈ ────────────────────────────────────────
@@ -80,7 +93,6 @@ window.onGestureCommand = function(cmd) {
 
   switch (cmd.state) {
     case 'ORBIT': {
-      // Xoay camera quanh mặt trời bằng lòng bàn tay mở
       controls.enabled = false;
       const spherical = new THREE.Spherical().setFromVector3(
         camera.position.clone().sub(controls.target)
@@ -94,7 +106,6 @@ window.onGestureCommand = function(cmd) {
     }
 
     case 'ZOOM': {
-      // Zoom bằng 2 tay pinch
       const dir     = camera.position.clone().sub(controls.target).normalize();
       const dist    = camera.position.distanceTo(controls.target);
       const newDist = Math.max(8, Math.min(200, dist - cmd.zoomDelta * 20));
@@ -172,19 +183,8 @@ window.drawLandmarks = function(hands) {
 };
 
 // ── VÒNG LẶP RENDER ───────────────────────────────────────────
-// MAX_STEP: giới hạn bước nhảy tối đa 1 frame để tránh teleport khi tay giật
-const MAX_STEP = 3;
-
 function animate() {
   requestAnimationFrame(animate);
-
-  // Copy trực tiếp → object đi cùng tốc độ với tay, không bị tụt hậu
-  if (isDragging && selectedMesh) {
-    const step = dragTarget.clone().sub(selectedMesh.position);
-    if (step.length() > MAX_STEP) step.setLength(MAX_STEP);
-    selectedMesh.position.add(step);
-  }
-
   controls.update();
   composer.render();
 }
