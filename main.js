@@ -172,15 +172,17 @@ window.drawLandmarks = function(hands) {
 };
 
 // ── VÒNG LẶP RENDER ───────────────────────────────────────────
-// Lerp hệ số 0.2: object đuổi mượt theo tay thay vì nhảy cứng
-const DRAG_LERP = 0.2;
+// MAX_STEP: giới hạn bước nhảy tối đa 1 frame để tránh teleport khi tay giật
+const MAX_STEP = 3;
 
 function animate() {
   requestAnimationFrame(animate);
 
-  // Object đuổi theo vị trí đích mượt mà (không cần delta cap)
+  // Copy trực tiếp → object đi cùng tốc độ với tay, không bị tụt hậu
   if (isDragging && selectedMesh) {
-    selectedMesh.position.lerp(dragTarget, DRAG_LERP);
+    const step = dragTarget.clone().sub(selectedMesh.position);
+    if (step.length() > MAX_STEP) step.setLength(MAX_STEP);
+    selectedMesh.position.add(step);
   }
 
   controls.update();
