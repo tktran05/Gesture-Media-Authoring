@@ -9,16 +9,15 @@ const { scene, camera, renderer, controls, sun, composer, planetMeshes } = initS
 const selectables = [...planetMeshes.map(p => p.mesh), sun];
 
 // ── DRAG STATE ────────────────────────────────────────────────
-const raycaster  = new THREE.Raycaster();
-const dragPlane  = new THREE.Plane();
-const dragNormal = new THREE.Vector3();
-const dragPoint  = new THREE.Vector3();
+const raycaster    = new THREE.Raycaster();
+const dragPlane    = new THREE.Plane();
+const dragNormal   = new THREE.Vector3();
+const dragTarget   = new THREE.Vector3(); // vị trí đích (cập nhật mỗi frame tay)
 
 let selectedMesh = null;
 let isDragging   = false;
 
-// Chuyển tọa độ tay (0-1) sang NDC Three.js (-1 đến 1)
-// Trục X đảo vì webcam bị mirror
+// Chuyển tọa độ tay (0–1, đã mirror) sang NDC Three.js (–1 đến 1)
 function toNDC(x, y) {
   return new THREE.Vector2((1 - x) * 2 - 1, -(y * 2 - 1));
 }
@@ -40,7 +39,7 @@ function trySelect(handX, handY) {
 function startDrag() {
   if (!selectedMesh) return;
 
-  // Reparent mesh về scene để di chuyển tự do trong không gian thế giới
+  // Reparent về scene để di chuyển tự do trong không gian thế giới
   if (selectedMesh.parent !== scene) {
     const worldPos = new THREE.Vector3();
     selectedMesh.getWorldPosition(worldPos);
@@ -49,7 +48,10 @@ function startDrag() {
     selectedMesh.position.copy(worldPos);
   }
 
-  // Mặt phẳng kéo thả: vuông góc với hướng camera, đi qua object đang chọn
+  // Khởi tạo dragTarget tại vị trí hiện tại để không bị giật lúc bắt đầu
+  dragTarget.copy(selectedMesh.position);
+
+  // Mặt phẳng kéo thả vuông góc với hướng camera, đi qua object
   camera.getWorldDirection(dragNormal);
   dragPlane.setFromNormalAndCoplanarPoint(dragNormal, selectedMesh.position);
   isDragging = true;
@@ -58,11 +60,12 @@ function startDrag() {
 function applyDrag(handX, handY) {
   if (!selectedMesh || !isDragging) return;
   raycaster.setFromCamera(toNDC(handX, handY), camera);
-  if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
 
-  const delta = dragPoint.clone().sub(selectedMesh.position);
-  if (delta.length() > 0.5) delta.setLength(0.5); // giới hạn tốc độ di chuyển
-  selectedMesh.position.add(delta);
+  // Cập nhật vị trí đích — object sẽ lerp tới đây trong animate()
+  const hit = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(dragPlane, hit)) {
+    dragTarget.copy(hit);
+  }
 }
 
 function stopDrag() {
@@ -82,8 +85,8 @@ window.onGestureCommand = function(cmd) {
       const spherical = new THREE.Spherical().setFromVector3(
         camera.position.clone().sub(controls.target)
       );
-      spherical.theta += cmd.dx * 3;
-      spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi - cmd.dy * 3));
+      spherical.theta += cmd.dx * 5;
+      spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi - cmd.dy * 5));
       camera.position.setFromSpherical(spherical).add(controls.target);
       camera.lookAt(controls.target);
       controls.enabled = true;
@@ -94,7 +97,7 @@ window.onGestureCommand = function(cmd) {
       // Zoom bằng 2 tay pinch
       const dir     = camera.position.clone().sub(controls.target).normalize();
       const dist    = camera.position.distanceTo(controls.target);
-      const newDist = Math.max(8, Math.min(200, dist - cmd.zoomDelta * 15));
+      const newDist = Math.max(8, Math.min(200, dist - cmd.zoomDelta * 20));
       camera.position.copy(controls.target).addScaledVector(dir, newDist);
       break;
     }
@@ -151,7 +154,6 @@ window.drawLandmarks = function(hands) {
       ctx.lineTo((1 - lm[b].x) * overlay.width, lm[b].y * overlay.height);
       ctx.stroke();
     }
-
     for (const [i, pt] of lm.entries()) {
       const x = (1 - pt.x) * overlay.width;
       const y = pt.y * overlay.height;
@@ -170,8 +172,17 @@ window.drawLandmarks = function(hands) {
 };
 
 // ── VÒNG LẶP RENDER ───────────────────────────────────────────
+// Lerp hệ số 0.2: object đuổi mượt theo tay thay vì nhảy cứng
+const DRAG_LERP = 0.2;
+
 function animate() {
   requestAnimationFrame(animate);
+
+  // Object đuổi theo vị trí đích mượt mà (không cần delta cap)
+  if (isDragging && selectedMesh) {
+    selectedMesh.position.lerp(dragTarget, DRAG_LERP);
+  }
+
   controls.update();
   composer.render();
 }
