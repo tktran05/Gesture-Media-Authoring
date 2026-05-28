@@ -151,7 +151,9 @@ function createPlanet(body) {
   mesh.castShadow    = true;
   mesh.receiveShadow = true;
   mesh.userData      = { name: body.name };
-  mesh.add(createLabel(body));
+
+  const label = createLabel(body);
+  mesh.add(label);
   if (body.hasRings) mesh.add(createRings(body));
 
   const pivot = new THREE.Object3D();
@@ -159,7 +161,7 @@ function createPlanet(body) {
   mesh.position.x  = body.dist;
   pivot.rotation.y = body.initialAngle;
 
-  return { mesh, pivot, data: body, orbitSpeed: body.speed };
+  return { mesh, pivot, label, data: body, orbitSpeed: body.speed };
 }
 
 // Nhãn tên — Sprite tự BILLBOARD (luôn hướng camera). Ẩn sẵn, focus mới bật.
