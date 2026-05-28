@@ -3,7 +3,7 @@ import { initSolarSystem } from './scene.js';
 import { setupGesture } from './gesture.js';
 
 // ── KHỞI TẠO SCENE ────────────────────────────────────────────
-const { scene, camera, renderer, controls, composer, planetMeshes, sun } = initSolarSystem();
+const { scene, camera, renderer, controls, composer, planetMeshes } = initSolarSystem();
 
 // Mặt trời cố định — không nằm trong danh sách chọn được
 const selectables = planetMeshes.map(p => p.mesh);
@@ -28,9 +28,14 @@ let lastDragY    = null;
 const FOCUS_LERP        = 0.08;   // tốc độ nội suy camera/target khi bay vào
 const FOCUS_DIST_FACTOR = 4.5;    // khoảng cách camera = bán kính hành tinh * factor
 
-let focusedMesh   = null;   // mesh đang focus (hành tinh HOẶC mặt trời)
-let focusDistance = 0;      // khoảng cách camera mong muốn tới mục tiêu
-let focusReady    = false;  // đã bay tới nơi → chuyển sang chế độ follow
+let focusedMesh    = null;  // mesh hành tinh đang focus
+let focusDistance  = 0;     // khoảng cách camera mong muốn tới mục tiêu
+let focusReady     = false; // đã bay tới nơi → chuyển sang chế độ follow
+let focusResetting = false; // đang bay về view ban đầu (nắm tay trái)
+
+// Snapshot view ban đầu (overview, tâm = mặt trời) để nắm tay trái quay lại
+const INITIAL_CAM_POS = camera.position.clone();
+const INITIAL_TARGET  = controls.target.clone();
 
 const _focusPos     = new THREE.Vector3(); // world pos mục tiêu (mỗi frame)
 const _prevFocusPos = new THREE.Vector3(); // world pos frame trước (để follow)
@@ -147,12 +152,11 @@ function stopDrag() {
 }
 
 // ── FOCUS HELPERS ─────────────────────────────────────────────
-// Raycast cho FOCUS. Bắt cả MẶT TRỜI (để thoát) lẫn hành tinh.
-// Độc lập với drag — KHÔNG đụng selectedMesh; mặt trời vẫn ngoài drag selectables.
-function pickFocusTarget(handX, handY) {
+// Raycast chọn HÀNH TINH để focus. Độc lập với drag (không đụng selectedMesh).
+function pickPlanet(handX, handY) {
   const ndc = toNDC(handX, handY);
   raycaster.setFromCamera(ndc, camera);
-  const hits = raycaster.intersectObjects([sun, ...selectables], false);
+  const hits = raycaster.intersectObjects(selectables, false);
   if (hits.length > 0) return hits[0].object;
 
   // Fallback: hành tinh gần con trỏ nhất trên màn hình (ngưỡng 15%)
@@ -178,19 +182,37 @@ function showLabelFor(mesh) {
 
 function enterFocus(mesh) {
   if (!mesh) return;
+  focusResetting = false; // huỷ reset nếu đang bay về mà pinch hành tinh
   focusReady   = false;   // bay lại từ đầu (đổi mục tiêu cũng dùng)
   focusedMesh  = mesh;
-  // Bán kính lấy thẳng từ geometry → áp dụng cho cả hành tinh lẫn mặt trời
   const radius = mesh.geometry?.parameters?.radius ?? 1;
   focusDistance = radius * FOCUS_DIST_FACTOR;
   showLabelFor(mesh);     // hiện nhãn hành tinh được focus (ẩn nhãn cũ)
 }
 
+// Nắm tay trái → bay về view ban đầu (overview, tâm = mặt trời)
+function resetFocus() {
+  focusedMesh    = null;  // ngừng bám hành tinh ngay
+  focusReady     = false;
+  focusResetting = true;
+  showLabelFor(null);     // ẩn mọi nhãn
+}
+
 // Gọi mỗi frame trong render loop, TRƯỚC controls.update().
-// Zoom vào mục tiêu và bám theo. Pinch mặt trời = zoom về mặt trời (đứng yên ở gốc
-// → controls.target về (0,0,0) → orbit lại xoay quanh tâm gốc).
-// Đổi mục tiêu: pinch tay trái vào hành tinh / mặt trời khác.
+// Zoom vào hành tinh và bám theo. Nắm tay trái = bay về view ban đầu.
+// Đổi hành tinh: pinch tay trái vào hành tinh khác.
 function updateFocus() {
+  // ── RESET: bay về view ban đầu (nắm tay trái) ──
+  if (focusResetting) {
+    controls.target.lerp(INITIAL_TARGET, FOCUS_LERP);
+    camera.position.lerp(INITIAL_CAM_POS, FOCUS_LERP);
+    if (controls.target.distanceTo(INITIAL_TARGET) < 0.05 &&
+        camera.position.distanceTo(INITIAL_CAM_POS) < 0.05) {
+      focusResetting = false;
+    }
+    return;
+  }
+
   if (!focusedMesh) return;
 
   focusedMesh.getWorldPosition(_focusPos);
@@ -265,11 +287,15 @@ window.onGestureCommand = function(cmd) {
     case 'PLANET_FOCUS': {
       // Chỉ raycast ở frame ĐẦU của lần pinch; frame sau để render loop bám theo.
       if (cmd.phase === 'start') {
-        const hit = pickFocusTarget(cmd.x, cmd.y);
-        if (hit) enterFocus(hit);  // hành tinh hoặc mặt trời đều zoom vào được
+        const hit = pickPlanet(cmd.x, cmd.y);
+        if (hit) enterFocus(hit);
       }
       break;
     }
+
+    case 'FOCUS_RESET':
+      resetFocus();   // nắm tay trái → bay về view ban đầu (mặt trời)
+      break;
   }
 };
 

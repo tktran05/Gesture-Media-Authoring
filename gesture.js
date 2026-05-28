@@ -38,6 +38,18 @@ function handLabel(entry) {
   return raw === 'Left' ? 'Right' : 'Left';
 }
 
+// Nắm tay: cả 4 ngón (trừ cái) đều CO lại. Là "đảo ngược" của isOpenPalm;
+// khoảng [1.1, 1.3] giữa hai ngưỡng tạo vùng trung tính để tránh nhấp nháy.
+function isFist(lm) {
+  function d(a, b) { return Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y); }
+  return (
+    d(8,  5) < d(6,  5) * 1.1 &&   // ngón trỏ co
+    d(12, 9) < d(10, 9) * 1.1 &&   // ngón giữa co
+    d(16,13) < d(14,13) * 1.1 &&   // ngón áp út co
+    d(20,17) < d(18,17) * 1.1      // ngón út co
+  );
+}
+
 // ── EMA ────────────────────────────────────────────────────────
 function ema(prev, val) {
   return prev === null ? val : EMA_ALPHA * val + (1 - EMA_ALPHA) * prev;
@@ -194,9 +206,15 @@ function processFrame(results) {
   const label = handLabel(handed?.[0]);
   const dist  = pinchDist(lm);
 
-  // ── PINCH TAY TRÁI → PLANET_FOCUS (không bao giờ drag) ─────
+  // ── TAY TRÁI: nắm tay = reset view, pinch = PLANET_FOCUS ───
   if (hands.length === 1 && label === 'Left') {
     forceEndPinch(); // dọn drag tay phải còn sót khi đổi sang tay trái
+    if (isFist(lm)) {
+      resetOrbit();
+      resetFocusPinch();
+      emit({ state: 'FOCUS_RESET' });
+      return;
+    }
     const threshold = focusState.active ? PINCH_EXIT : PINCH_ENTER;
     if (dist < threshold) {
       resetOrbit();
