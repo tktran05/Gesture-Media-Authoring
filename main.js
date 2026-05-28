@@ -239,12 +239,13 @@ function animate() {
 
   const delta = clock.getDelta();
 
-  // Cập nhật quỹ đạo cho tất cả hành tinh trừ hành tinh đang kéo
+  // Cập nhật quỹ đạo + tự xoay cho tất cả hành tinh
   const dragging = isDragging ? planetMeshes.find(p => p.mesh === selectedMesh) : null;
   for (const p of planetMeshes) {
     if (p !== dragging) {
-      p.pivot.rotation.y += p.orbitSpeed * delta;
+      p.pivot.rotation.y += p.orbitSpeed * delta;       // xoay quanh mặt trời
     }
+    p.mesh.rotation.y += p.data.selfRotation * delta;   // tự xoay quanh trục
   }
 
   controls.update();
