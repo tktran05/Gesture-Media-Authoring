@@ -24,6 +24,23 @@ let isDragging   = false;
 let lastDragX    = null;
 let lastDragY    = null;
 
+// ── FOCUS STATE (độc lập hoàn toàn với hệ drag ở trên) ────────
+const FOCUS_LERP        = 0.08;   // tốc độ nội suy camera/target khi bay vào
+const FOCUS_DIST_FACTOR = 4.5;    // khoảng cách camera = bán kính hành tinh * factor
+const FOCUS_EXIT_MS     = 1500;   // không thấy tay quá lâu → tự thoát focus
+
+let focusedMesh    = null;   // mesh hành tinh đang được focus
+let focusDistance  = 0;      // khoảng cách camera mong muốn tới hành tinh
+let focusReady     = false;  // đã bay tới nơi → chuyển sang chế độ follow
+let focusExiting   = false;  // đang bay trở về view ban đầu
+let savedCamPos    = null;   // vị trí camera trước khi vào focus
+let savedTarget    = null;   // controls.target trước khi vào focus
+let lastHandSeenAt = performance.now();
+
+const _focusPos     = new THREE.Vector3(); // world pos hành tinh (mỗi frame)
+const _prevFocusPos = new THREE.Vector3(); // world pos frame trước (để follow)
+const _focusDelta   = new THREE.Vector3(); // quãng hành tinh đi giữa 2 frame
+
 function toNDC(x, y) {
   return new THREE.Vector2((1 - x) * 2 - 1, -(y * 2 - 1));
 }
@@ -134,8 +151,99 @@ function stopDrag() {
   lastDragX    = lastDragY = null;
 }
 
+// ── FOCUS HELPERS ─────────────────────────────────────────────
+// Raycast chọn hành tinh để FOCUS. Độc lập với drag — KHÔNG đụng selectedMesh.
+function pickPlanet(handX, handY) {
+  const ndc = toNDC(handX, handY);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(selectables, false);
+  if (hits.length > 0) return hits[0].object;
+
+  // Fallback: hành tinh gần con trỏ nhất trên màn hình (ngưỡng 15%)
+  const THRESH = 0.15;
+  let best = null, bestDist = THRESH;
+  for (const mesh of selectables) {
+    mesh.getWorldPosition(_wPos);
+    const p = _wPos.project(camera);
+    const d = Math.hypot(p.x - ndc.x, p.y - ndc.y);
+    if (d < bestDist) { bestDist = d; best = mesh; }
+  }
+  return best;
+}
+
+function enterFocus(mesh) {
+  if (!mesh) return;
+  // Lưu view hiện tại chỉ ở LẦN ĐẦU vào focus (không ghi đè khi đổi hành tinh)
+  if (!focusedMesh && !focusExiting) {
+    savedCamPos = camera.position.clone();
+    savedTarget = controls.target.clone();
+  }
+  focusExiting = false;
+  focusReady   = false;
+  focusedMesh  = mesh;
+  const entry  = planetMeshes.find(p => p.mesh === mesh);
+  const radius = entry ? entry.data.size : 1;
+  focusDistance = radius * FOCUS_DIST_FACTOR;
+}
+
+// Gọi mỗi frame trong render loop, TRƯỚC controls.update().
+function updateFocus() {
+  const now = performance.now();
+
+  // Hết tay quá lâu → bắt đầu bay về view cũ
+  if (focusedMesh && !focusExiting && now - lastHandSeenAt > FOCUS_EXIT_MS) {
+    focusExiting = true;
+  }
+
+  // ── THOÁT: khôi phục camera & target về trạng thái trước focus ──
+  if (focusExiting) {
+    if (savedTarget) controls.target.lerp(savedTarget, FOCUS_LERP);
+    if (savedCamPos) camera.position.lerp(savedCamPos, FOCUS_LERP);
+    const doneT = !savedTarget || controls.target.distanceTo(savedTarget) < 0.05;
+    const doneC = !savedCamPos || camera.position.distanceTo(savedCamPos) < 0.05;
+    if (doneT && doneC) {
+      focusedMesh = null;
+      focusExiting = false;
+      focusReady   = false;
+      savedCamPos  = savedTarget = null;
+    }
+    return;
+  }
+
+  if (!focusedMesh) return;
+
+  focusedMesh.getWorldPosition(_focusPos);
+
+  if (!focusReady) {
+    // PHA 1 — BAY VÀO: kéo target & camera về hành tinh theo focusDistance
+    controls.target.lerp(_focusPos, FOCUS_LERP);
+    const dir     = camera.position.clone().sub(controls.target).normalize();
+    const desired = _focusPos.clone().add(dir.multiplyScalar(focusDistance));
+    camera.position.lerp(desired, FOCUS_LERP);
+
+    if (controls.target.distanceTo(_focusPos) < 0.15) {
+      focusReady = true;
+      controls.target.copy(_focusPos);    // snap nhỏ để tâm orbit khớp chính xác
+      _prevFocusPos.copy(_focusPos);
+    }
+  } else {
+    // PHA 2 — FOLLOW: dời camera + target đúng bằng quãng hành tinh đã đi.
+    // Giữ nguyên góc orbit & khoảng cách zoom của người dùng (không ép lại),
+    // nên hành tinh luôn ở tâm khi nó tiếp tục chạy quanh mặt trời.
+    _focusDelta.copy(_focusPos).sub(_prevFocusPos);
+    camera.position.add(_focusDelta);
+    controls.target.copy(_focusPos);
+    _prevFocusPos.copy(_focusPos);
+  }
+}
+
 // ── XỬ LÝ LỆNH CỬ CHỈ ────────────────────────────────────────
 window.onGestureCommand = function(cmd) {
+  // Bất kỳ lệnh nào CÓ tay → cập nhật mốc "thấy tay gần nhất" (dùng để thoát focus)
+  if (!(cmd.state === 'IDLE' && cmd.noHand)) {
+    lastHandSeenAt = performance.now();
+  }
+
   document.getElementById('gesture-label').textContent = cmd.state;
 
   switch (cmd.state) {
@@ -175,6 +283,16 @@ window.onGestureCommand = function(cmd) {
         if (entry) snapToNearestOrbit(entry);
       }
       stopDrag();
+      break;
+    }
+
+    case 'PLANET_FOCUS': {
+      // Chỉ raycast chọn hành tinh ở frame ĐẦU của lần pinch; các frame sau
+      // (phase 'move') để render loop tự bám theo hành tinh đã chọn.
+      if (cmd.phase === 'start') {
+        const mesh = pickPlanet(cmd.x, cmd.y);
+        if (mesh) enterFocus(mesh);
+      }
       break;
     }
   }
@@ -247,6 +365,8 @@ function animate() {
     }
     p.mesh.rotation.y += p.data.selfRotation * delta;   // tự xoay quanh trục
   }
+
+  updateFocus();
 
   controls.update();
   composer.render();

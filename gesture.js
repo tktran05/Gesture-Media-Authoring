@@ -10,6 +10,11 @@ const PINCH_EXIT  = 0.115;  // khoảng cách để KẾT THÚC pinch (rộng h�
 // Số frame không-pinch liên tiếp cần thiết để thực sự kết thúc drag
 const DRAG_EXIT_FRAMES = 2;
 
+// Tay nào kích hoạt FOCUS. MediaPipe trả handedness GIẢ ĐỊNH ảnh đã lật (selfie);
+// webcam ở đây gửi ảnh GỐC (chưa lật) nên nhãn bị đảo so với tay thật → swap lại.
+// Nếu chạy thấy ngược (tay PHẢI lại focus), đổi thành false.
+const SWAP_HANDEDNESS = true;
+
 // ── DETECTORS ──────────────────────────────────────────────────
 function pinchDist(lm) {
   return Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
@@ -26,6 +31,13 @@ function isOpenPalm(lm) {
   );
 }
 
+// Chuẩn hoá nhãn tay về tay THẬT của người dùng (xem SWAP_HANDEDNESS).
+function handLabel(entry) {
+  const raw = entry?.label ?? 'Right';
+  if (!SWAP_HANDEDNESS) return raw;
+  return raw === 'Left' ? 'Right' : 'Left';
+}
+
 // ── EMA ────────────────────────────────────────────────────────
 function ema(prev, val) {
   return prev === null ? val : EMA_ALPHA * val + (1 - EMA_ALPHA) * prev;
@@ -39,6 +51,12 @@ const pinchState = {
   exitCount: 0,     // số frame liên tiếp không đủ điều kiện pinch
   smoothX:   null,
   smoothY:   null,
+};
+// State riêng cho FOCUS (pinch tay trái) — tách khỏi drag để không ảnh hưởng nhau
+const focusState = {
+  active:  false,
+  smoothX: null,
+  smoothY: null,
 };
 
 function resetOrbit() {
@@ -89,6 +107,29 @@ function handlePinch(lm) {
   }
 }
 
+function resetFocusPinch() {
+  focusState.active  = false;
+  focusState.smoothX = focusState.smoothY = null;
+}
+
+// Pinch tay TRÁI → PLANET_FOCUS. KHÔNG bao giờ emit DRAG_*.
+// phase 'start' (frame đầu): main.js raycast chọn hành tinh.
+// phase 'move'  (các frame sau): main.js đã bám theo hành tinh ở render loop.
+function handleFocusPinch(lm) {
+  const f = focusState;
+  f.smoothX = ema(f.smoothX, (lm[4].x + lm[8].x) / 2);
+  f.smoothY = ema(f.smoothY, (lm[4].y + lm[8].y) / 2);
+  const starting = !f.active;
+  f.active = true;
+  emit({
+    state:      'PLANET_FOCUS',
+    phase:      starting ? 'start' : 'move',
+    handedness: 'Left',
+    x:          f.smoothX,
+    y:          f.smoothY,
+  });
+}
+
 // Không thoát drag ngay — đếm frame rồi mới quyết định
 // Trong khi đang đếm: object đứng yên (không emit DRAG)
 function tryEndPinch() {
@@ -105,19 +146,21 @@ function tryEndPinch() {
 }
 
 // ── PROCESS FRAME ──────────────────────────────────────────────
-function processFrame({ multiHandLandmarks }) {
+function processFrame(results) {
+  const hands = results.multiHandLandmarks;
+  const handed = results.multiHandedness;
+
   if (typeof window.drawLandmarks === 'function') {
-    window.drawLandmarks(multiHandLandmarks);
+    window.drawLandmarks(hands);
   }
 
-  const hands = multiHandLandmarks;
-
-  // Không có tay
+  // Không có tay — noHand:true để main.js biết mà đếm giờ thoát focus
   if (!hands?.length) {
     forceEndPinch();
     resetOrbit();
     resetZoom();
-    emit({ state: 'IDLE' });
+    resetFocusPinch();
+    emit({ state: 'IDLE', noHand: true });
     return;
   }
 
@@ -130,6 +173,7 @@ function processFrame({ multiHandLandmarks }) {
     if (d1 < PINCH_EXIT && d2 < PINCH_EXIT) {
       resetOrbit();
       forceEndPinch();
+      resetFocusPinch();
       const z = zoomState;
       const cx1 = (hands[0][4].x + hands[0][8].x) / 2;
       const cy1 = (hands[0][4].y + hands[0][8].y) / 2;
@@ -147,28 +191,41 @@ function processFrame({ multiHandLandmarks }) {
   }
   resetZoom();
 
-  // ── PINCH DRAG: ưu tiên kiểm tra trước orbit ───────────────
-  // Dùng ngưỡng hysteresis: nếu đang drag thì ngưỡng thoát rộng hơn
-  const dist = pinchDist(lm);
-  const threshold = pinchState.active ? PINCH_EXIT : PINCH_ENTER;
+  const label = handLabel(handed?.[0]);
+  const dist  = pinchDist(lm);
 
-  if (hands.length === 1 && dist < threshold) {
-    resetOrbit();
-    handlePinch(lm);
-    return;
+  // ── PINCH TAY TRÁI → PLANET_FOCUS (không bao giờ drag) ─────
+  if (hands.length === 1 && label === 'Left') {
+    forceEndPinch(); // dọn drag tay phải còn sót khi đổi sang tay trái
+    const threshold = focusState.active ? PINCH_EXIT : PINCH_ENTER;
+    if (dist < threshold) {
+      resetOrbit();
+      handleFocusPinch(lm);
+      return;
+    }
+    resetFocusPinch();
+    // tay trái mở → rơi xuống xét ORBIT bên dưới
+  } else {
+    // ── PINCH TAY PHẢI → DRAG (giữ nguyên hành vi cũ) ────────
+    resetFocusPinch();
+    const threshold = pinchState.active ? PINCH_EXIT : PINCH_ENTER;
+    if (hands.length === 1 && dist < threshold) {
+      resetOrbit();
+      handlePinch(lm);
+      return;
+    }
+    // Không đủ điều kiện pinch → thử kết thúc drag (có độ trễ)
+    tryEndPinch();
   }
 
-  // Không đủ điều kiện pinch → thử kết thúc drag (có độ trễ)
-  const ended = tryEndPinch();
-
-  // ── ORBIT: lòng bàn tay mở (chỉ khi không đang drag) ──────
-  if (!pinchState.active && hands.length === 1 && isOpenPalm(lm)) {
+  // ── ORBIT: lòng bàn tay mở (chỉ khi không drag/không focus-pinch) ──
+  if (!pinchState.active && !focusState.active && hands.length === 1 && isOpenPalm(lm)) {
     handleOrbit(lm);
     return;
   }
   resetOrbit();
 
-  if (!pinchState.active) emit({ state: 'IDLE' });
+  if (!pinchState.active) emit({ state: 'IDLE', noHand: false });
 }
 
 // ── SETUP ──────────────────────────────────────────────────────
