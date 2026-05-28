@@ -34,11 +34,32 @@ function highlight(mesh, on) {
   }
 }
 
+const _wPos = new THREE.Vector3();
+
 function trySelect(handX, handY) {
-  raycaster.setFromCamera(toNDC(handX, handY), camera);
-  const hits = raycaster.intersectObjects(selectables, false);
+  const ndc = toNDC(handX, handY);
   highlight(selectedMesh, false);
-  selectedMesh = hits.length > 0 ? hits[0].object : null;
+
+  // Thử raycast chính xác trước
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(selectables, false);
+  if (hits.length > 0) {
+    selectedMesh = hits[0].object;
+    highlight(selectedMesh, true);
+    return;
+  }
+
+  // Fallback: chọn hành tinh gần nhất trên màn hình trong ngưỡng 15% chiều ngang
+  const THRESH = 0.15;
+  let bestMesh = null;
+  let bestDist = THRESH;
+  for (const mesh of selectables) {
+    mesh.getWorldPosition(_wPos);
+    const p = _wPos.project(camera);
+    const d = Math.hypot(p.x - ndc.x, p.y - ndc.y);
+    if (d < bestDist) { bestDist = d; bestMesh = mesh; }
+  }
+  selectedMesh = bestMesh;
   highlight(selectedMesh, true);
 }
 
@@ -134,7 +155,7 @@ window.onGestureCommand = function(cmd) {
     case 'ZOOM': {
       const dir     = camera.position.clone().sub(controls.target).normalize();
       const dist    = camera.position.distanceTo(controls.target);
-      const newDist = Math.max(8, Math.min(200, dist - cmd.zoomDelta * 20));
+      const newDist = Math.max(8, Math.min(200, dist - cmd.zoomDelta * 40));
       camera.position.copy(controls.target).addScaledVector(dir, newDist);
       break;
     }
