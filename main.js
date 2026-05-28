@@ -167,6 +167,15 @@ function pickFocusTarget(handX, handY) {
   return best;
 }
 
+// Nhãn đang hiển thị (chỉ 1 cái mỗi lúc). Mặt trời không có nhãn → focus mặt trời = ẩn hết.
+let visibleLabel = null;
+function showLabelFor(mesh) {
+  if (visibleLabel) visibleLabel.visible = false;
+  const entry  = planetMeshes.find(p => p.mesh === mesh);
+  visibleLabel = entry?.label ?? null;
+  if (visibleLabel) visibleLabel.visible = true;
+}
+
 function enterFocus(mesh) {
   if (!mesh) return;
   focusReady   = false;   // bay lại từ đầu (đổi mục tiêu cũng dùng)
@@ -174,6 +183,7 @@ function enterFocus(mesh) {
   // Bán kính lấy thẳng từ geometry → áp dụng cho cả hành tinh lẫn mặt trời
   const radius = mesh.geometry?.parameters?.radius ?? 1;
   focusDistance = radius * FOCUS_DIST_FACTOR;
+  showLabelFor(mesh);     // hiện nhãn hành tinh được focus (ẩn nhãn cũ)
 }
 
 // Gọi mỗi frame trong render loop, TRƯỚC controls.update().

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import SpriteText from 'three-spritetext';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Lensflare, LensflareElement } from 'three/examples/jsm/objects/Lensflare.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -125,6 +126,16 @@ export function initSolarSystem() {
     mesh.receiveShadow = true;
     mesh.userData      = { name: body.name };
 
+    // Nhãn tên hành tinh — Sprite tự BILLBOARD (luôn hướng camera).
+    // Gắn vào mesh nên di chuyển cùng hành tinh; đặt phía trên (trục Y bất biến
+    // dưới self-rotation). Ẩn sẵn, main.js bật khi focus.
+    const label = new SpriteText(body.name);
+    label.color      = '#ffffff';
+    label.textHeight = body.size * 0.8;
+    label.position.set(0, body.size * 1.8, 0);
+    label.visible    = false;
+    mesh.add(label);
+
     const pivot = new THREE.Object3D();
     pivot.add(mesh);
     mesh.position.x  = body.dist;
@@ -158,7 +169,7 @@ export function initSolarSystem() {
     orbit.position.y = -0.01;
     scene.add(orbit);
 
-    planetMeshes.push({ mesh, pivot, data: body });
+    planetMeshes.push({ mesh, pivot, data: body, label });
   });
 
   // ── POST-PROCESSING ────────────────────────────────────────
