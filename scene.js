@@ -132,6 +132,7 @@ export function initSolarSystem() {
     const label = new SpriteText(body.name);
     label.color      = '#ffffff';
     label.textHeight = body.size * 0.8;
+    label.fontWeight  = '150';
     label.position.set(0, body.size * 1.8, 0);
     label.visible    = false;
     mesh.add(label);
@@ -177,7 +178,7 @@ export function initSolarSystem() {
   composer.addPass(new RenderPass(scene, camera));
 
   const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.6, 0.05
+    new THREE.Vector2(window.innerWidth, window.innerHeight), 0.3, 0.2, 0.1
   );
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());

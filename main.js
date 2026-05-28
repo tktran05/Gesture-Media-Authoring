@@ -384,5 +384,20 @@ window.addEventListener('resize', () => {
   overlay.height = window.innerHeight;
 });
 
+// ── NHẠC NỀN (loop vô hạn) ────────────────────────────────────
+const bgm = new Audio('/textures/interstellar.mp3');
+bgm.loop   = true;
+bgm.volume = 0.6;
+// Thử tự phát; nếu trình duyệt chặn autoplay → phát ở lần tương tác đầu tiên
+bgm.play().catch(() => {
+  const startBgm = () => {
+    bgm.play();
+    window.removeEventListener('pointerdown', startBgm);
+    window.removeEventListener('keydown', startBgm);
+  };
+  window.addEventListener('pointerdown', startBgm);
+  window.addEventListener('keydown', startBgm);
+});
+
 // ── KHỞI ĐỘNG GESTURE ─────────────────────────────────────────
 setupGesture(document.getElementById('webcam'));
