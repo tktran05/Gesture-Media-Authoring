@@ -7,8 +7,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
-// ── CẤU HÌNH HÀNH TINH (nguồn dữ liệu duy nhất) ────────────────
-// speed: tốc độ quỹ đạo (rad/s) — tỉ lệ Kepler: gần mặt trời = nhanh hơn
+// ── CẤU HÌNH HÀNH TINH ────────────────
 const PLANETS = [
   { name: 'Mercury', size: 0.5,  dist: 8,  speed: 0.80, selfRotation: 0.30, initialAngle: 2.1,  texture: 'mercury.jpg', roughness: 1,    metalness: 0.02 },
   { name: 'Venus',   size: 0.9,  dist: 11, speed: 0.50, selfRotation: 0.20, initialAngle: 4.8,  texture: 'venus.jpg',   roughness: 0.6,  metalness: 0.05 },
@@ -27,7 +26,6 @@ const tex = (file) => loader.load(`/textures/${file}`);
 export function createScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000814);
-  scene.fog = new THREE.Fog(0x000814, 180, 250);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 30, 70);
@@ -92,7 +90,7 @@ function addLights(scene) {
 
 function addSky(scene) {
   const stars = new THREE.Mesh(
-    new THREE.SphereGeometry(200, 64, 64),
+    new THREE.SphereGeometry(200, 32, 32),
     new THREE.MeshBasicMaterial({
       map: tex('8k_stars.jpg'),
       side: THREE.BackSide,
@@ -103,7 +101,7 @@ function addSky(scene) {
   scene.add(stars);
 
   const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(190, 64, 64),
+    new THREE.SphereGeometry(190, 32, 32),
     new THREE.MeshBasicMaterial({
       map: tex('stars.jpg'),
       side: THREE.BackSide,

@@ -12,6 +12,8 @@
     "vite": "^8.0.4"
   },
   "dependencies": {
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/hands": "^0.4.1675469240",
     "three": "^0.183.2",
     "three-spritetext": "^1.10.0"
   }

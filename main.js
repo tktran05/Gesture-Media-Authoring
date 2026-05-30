@@ -4,6 +4,7 @@ import { setupGesture } from './src/gesture.js';
 import { createDragController } from './src/drag.js';
 import { createFocusController } from './src/focus.js';
 import { createHandOverlay } from './src/overlay.js';
+import { orbitCamera, zoomCamera } from './src/cameraGestures.js';
 
 // ── KHỞI TẠO ──────────────────────────────────────────────────
 const { scene, camera, renderer, controls, composer, planets } = createScene();
@@ -15,34 +16,13 @@ const overlay = createHandOverlay(document.getElementById('overlay'));
 const clock       = new THREE.Clock();
 const statusLabel = document.getElementById('gesture-label');
 
-// ── CỬ CHỈ CAMERA (orbit / zoom quanh controls.target) ────────
-const ZOOM_MIN = 8;
-const ZOOM_MAX = 200;
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
-function orbitCamera(dx, dy) {
-  const spherical = new THREE.Spherical().setFromVector3(
-    camera.position.clone().sub(controls.target)
-  );
-  spherical.theta += dx * 5;
-  spherical.phi = clamp(spherical.phi - dy * 5, 0.05, Math.PI - 0.05);
-  camera.position.setFromSpherical(spherical).add(controls.target);
-  camera.lookAt(controls.target);
-}
-
-function zoomCamera(zoomDelta) {
-  const dir     = camera.position.clone().sub(controls.target).normalize();
-  const newDist = clamp(camera.position.distanceTo(controls.target) - zoomDelta * 40, ZOOM_MIN, ZOOM_MAX);
-  camera.position.copy(controls.target).addScaledVector(dir, newDist);
-}
-
 // ── ĐỊNH TUYẾN LỆNH CỬ CHỈ ────────────────────────────────────
 function onCommand(cmd) {
   statusLabel.textContent = cmd.state;
 
   switch (cmd.state) {
-    case 'ORBIT': orbitCamera(cmd.dx, cmd.dy); break;
-    case 'ZOOM':  zoomCamera(cmd.zoomDelta);   break;
+    case 'ORBIT': orbitCamera(camera, controls, cmd.dx, cmd.dy); break;
+    case 'ZOOM':  zoomCamera(camera, controls, cmd.zoomDelta);   break;
 
     case 'DRAG_START':
     case 'DRAG':
