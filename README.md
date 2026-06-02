@@ -7,16 +7,16 @@ Live demo avaiable at: https://poetic-crostata-aeb4d6.netlify.app/
 
 ---
 
-## Features
+## Usage
+All interaction happens with **your hand in front of the webcam**. The HUD in the top-left always shows the currently detected gesture state.
 
-- **5 hand gestures** drive the entire experience: orbit, zoom, drag-and-drop, focus, and reset.
-- **8-planet solar system** with Kepler-style orbital speeds and self-rotation.
-- **Drag-to-orbit snapping**: pull a planet to any orbit and it adopts that orbit's speed.
-- **Focus mode**: zoom into any planet and the camera follows it through its orbit.
-- **Camera-facing 3D labels** for each planet (auto-billboard sprites).
-- **Cinematic visuals**: ACES tone mapping, Unreal-style bloom, sun lensflare, starfield skybox.
-- **Looping background music** (Interstellar theme) with autoplay fallback.
-- **Hysteresis + EMA smoothing** for stable, jitter-free gesture recognition.
+| Gesture | Action |
+|---------|--------|
+| ✋ **One hand, open palm** | Orbit the camera around the current target |
+| 👌👌 **Both hands pinching** | Zoom in / out (move hands apart = closer, together = farther) |
+| 👌 **Right-hand pinch** on a planet | Grab and drag the planet; release to snap it onto the nearest orbit |
+| 🤏 **Left-hand pinch** on a planet | Fly the camera into focus on that planet (camera follows it through its orbit) |
+| ✊ **Left-hand fist** | Exit focus and zoom back out to the initial overview |
 
 ---
 
@@ -89,18 +89,4 @@ Then **allow webcam access** when prompted.
 python -m http.server 8080
 # open http://localhost:8080
 ```
-
----
-
-## Usage
-
-All interaction happens with **your hand in front of the webcam**. The HUD in the top-left always shows the currently detected gesture state.
-
-| Gesture | Action |
-|---------|--------|
-| ✋ **One hand, open palm** | Orbit the camera around the current target |
-| 👌👌 **Both hands pinching** | Zoom in / out (move hands apart = closer, together = farther) |
-| 👌 **Right-hand pinch** on a planet | Grab and drag the planet; release to snap it onto the nearest orbit |
-| 🤏 **Left-hand pinch** on a planet | Fly the camera into focus on that planet (camera follows it through its orbit) |
-| ✊ **Left-hand fist** | Exit focus and zoom back out to the initial overview |
 
