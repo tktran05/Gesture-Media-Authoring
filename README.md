@@ -1,4 +1,4 @@
-# gesture-3d-scene
+# Gesture-Media-Authoring-System
 
 An interactive 3D Solar System controlled entirely by **hand gestures** via your webcam — no mouse, no keyboard. Built with Three.js for rendering and MediaPipe Hands for real-time gesture recognition.
 
