@@ -1,17 +1,20 @@
 import * as THREE from 'three';
-import { pickPlanet } from './picking.js';
+import { pickPlanet, screenToNDC } from './picking.js';
 
 // Kéo hành tinh bằng pinch tay phải, thả ra thì snap về quỹ đạo gần nhất.
-// Toàn bộ state (mesh đang chọn, đang kéo, vị trí trước) đóng gói trong closure.
+// Kiểu Blender-style "Grab": mặt phẳng kéo đi qua object, vuông góc camera.
 export function createDragController({ scene, camera, planets }) {
   const raycaster   = new THREE.Raycaster();
   const selectables = planets.map(p => p.mesh);
   const orbits      = planets.map(p => ({ dist: p.data.dist, speed: p.data.speed }));
 
+  // Tái dùng (tránh new mỗi frame)
+  const _dragPlane = new THREE.Plane();
+  const _hit       = new THREE.Vector3();
+  const _camDir    = new THREE.Vector3();
+
   let selected = null;
   let dragging = false;
-  let lastX = null;
-  let lastY = null;
 
   function highlight(mesh, on) {
     if (mesh?.material?.emissive) {
@@ -35,33 +38,23 @@ export function createDragController({ scene, camera, planets }) {
       scene.add(selected);
       selected.position.copy(worldPos);
     }
-    lastX = lastY = null;
+    // Dựng mặt phẳng kéo: đi qua object, vuông góc hướng nhìn camera (Blender Grab)
+    camera.getWorldDirection(_camDir);
+    _dragPlane.setFromNormalAndCoplanarPoint(_camDir, selected.position);
     dragging = true;
   }
 
+  // Bắn tia từ camera qua vị trí tay, giao với mặt phẳng kéo → đặt object tại đó.
+  // Plane đã được dựng ở begin() nên object giữ nguyên độ sâu suốt drag.
   function move(handX, handY) {
     if (!selected || !dragging) return;
-    if (lastX === null) { lastX = handX; lastY = handY; return; }
-
-    const dx = handX - lastX;
-    const dy = handY - lastY;
-    lastX = handX;
-    lastY = handY;
-
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const up    = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-
-    // Projected depth → scale ổn định khi object di ngang (giống Blender)
-    const dist  = camDir.dot(selected.position.clone().sub(camera.position));
-    const scale = dist * 2 * Math.tan((camera.fov * Math.PI / 180) / 2);
-
-    selected.position.addScaledVector(right, -dx * scale * camera.aspect);
-    selected.position.addScaledVector(up,    -dy * scale);
+    raycaster.setFromCamera(screenToNDC(handX, handY), camera);
+    if (raycaster.ray.intersectPlane(_dragPlane, _hit)) {
+      selected.position.copy(_hit);
+    }
   }
 
-  // Snap hành tinh về quỹ đạo có bán kính gần nhất + nhận tốc độ quỹ đạo đó
+  
   function snapToNearestOrbit(entry) {
     const { mesh, pivot } = entry;
 
@@ -76,7 +69,7 @@ export function createDragController({ scene, camera, planets }) {
     scene.remove(mesh);
     pivot.add(mesh);
     pivot.rotation.y = Math.atan2(-wPos.z, wPos.x);
-    mesh.position.set(nearest.dist, 0, 0); // về mặt phẳng quỹ đạo (y=0)
+    mesh.position.set(nearest.dist, 0, 0); 
 
     entry.orbitSpeed = nearest.speed;
   }
@@ -89,11 +82,10 @@ export function createDragController({ scene, camera, planets }) {
     highlight(selected, false);
     dragging = false;
     selected = null;
-    lastX = lastY = null;
   }
 
   return {
-    // Hành tinh đang bị kéo (để render loop tạm dừng quỹ đạo của nó)
+
     getDraggedPlanet() {
       return dragging ? planets.find(p => p.mesh === selected) : null;
     },

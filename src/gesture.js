@@ -83,7 +83,8 @@ function resetAll() {
 // ── COMMAND EMISSION ───────────────────────────────────────────
 let onCommand   = () => {};
 let onLandmarks = () => {};
-function emit(cmd) { onCommand(cmd); }
+function emit(cmd) { onCommand(cmd); }        // ≡ main.onCommand({state:'ORBIT', dx:0.012, dy:-0.003})
+
 
 // ── GESTURE HANDLERS (mỗi cái cập nhật state + emit lệnh) ──────
 function handleOrbit(lm) {
