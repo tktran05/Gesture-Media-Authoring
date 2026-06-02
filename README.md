@@ -2,7 +2,8 @@
 
 An interactive 3D Solar System controlled entirely by **hand gestures** via your webcam — no mouse, no keyboard. Built with Three.js for rendering and MediaPipe Hands for real-time gesture recognition.
 
-> Course project — **TP25216** *Real-Time 3D Object Placement and Manipulation Using Hand Gestures*.
+## Demo
+Live demo avaiable at: https://poetic-crostata-aeb4d6.netlify.app/
 
 ---
 
@@ -16,11 +17,6 @@ An interactive 3D Solar System controlled entirely by **hand gestures** via your
 - **Cinematic visuals**: ACES tone mapping, Unreal-style bloom, sun lensflare, starfield skybox.
 - **Looping background music** (Interstellar theme) with autoplay fallback.
 - **Hysteresis + EMA smoothing** for stable, jitter-free gesture recognition.
-
----
-
-## Demo
-Live demo avaiable at: https://poetic-crostata-aeb4d6.netlify.app/
 
 ---
 
