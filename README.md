@@ -20,12 +20,7 @@ An interactive 3D Solar System controlled entirely by **hand gestures** via your
 ---
 
 ## Demo
-
-| | |
-|---|---|
-| **Live HUD** shows the currently detected gesture state in the top-left corner. | Hand skeleton (21 landmarks) is drawn as an overlay so you can debug what MediaPipe sees. |
-
-> Screenshots / GIF: *to be added — run the project locally to try it.*
+Live demo avaiable at: https://poetic-crostata-aeb4d6.netlify.app/
 
 ---
 
@@ -91,8 +86,6 @@ npm install
 
 Then **allow webcam access** when prompted.
 
-> The webcam API requires either `localhost` or **HTTPS**. Opening `index.html` directly via `file://` will **not** work.
-
 ### Running the built bundle on another machine
 
 ```bash
@@ -115,137 +108,3 @@ All interaction happens with **your hand in front of the webcam**. The HUD in th
 | 🤏 **Left-hand pinch** on a planet | Fly the camera into focus on that planet (camera follows it through its orbit) |
 | ✊ **Left-hand fist** | Exit focus and zoom back out to the initial overview |
 
-### Typical workflow
-
-1. Start with both hands down → camera in overview.
-2. ✋ Open palm to orbit and find a planet.
-3. 🤏 Left pinch on it → camera flies in and follows it.
-4. ✋ Open palm now orbits **around the focused planet**.
-5. ✊ Left fist → fly back to the overview.
-6. 👌 Right pinch a planet → drag it; release it near another orbit ring → it snaps and inherits that orbit's Kepler speed.
-
----
-
-## Configuration
-
-The project has **no environment variables or external config files** — everything is tunable through named constants in source. The most useful knobs:
-
-| Constant | File | Purpose |
-|----------|------|---------|
-| `SWAP_HANDEDNESS` | [`src/gesture.js`](src/gesture.js) | Flip MediaPipe's left/right label. Set to `false` if your real hand is detected backwards. |
-| `EMA_ALPHA` | `src/gesture.js` | Smoothing factor for hand position (0–1). Higher = more responsive, less smooth. |
-| `PINCH_ENTER` / `PINCH_EXIT` | `src/gesture.js` | Hysteresis thresholds for pinch detection (enter tight, exit looser). |
-| `DRAG_EXIT_FRAMES` | `src/gesture.js` | Frames of "no pinch" required before drag actually ends (debounce). |
-| `FOCUS_LERP`, `FOCUS_DIST_FACTOR` | `src/focus.js` | Lerp speed and final camera distance for focus mode (`radius × DIST_FACTOR`). |
-| `ZOOM_MIN`, `ZOOM_MAX` | `src/cameraGestures.js` | Camera distance clamp. |
-| `PLANETS[]` | `src/scene.js` | Single source of truth for planet sizes, orbits, speeds, textures. |
-| `UnrealBloomPass(..., strength, radius, threshold)` | `src/scene.js` → `createComposer` | Bloom intensity and threshold. |
-| `bgm.volume` | `main.js` → `startMusic` | Background music volume (0–1). |
-
----
-
-## Architecture Overview
-
-The system has **two independent loops** that communicate only through shared state (`camera`, `controls`, `planets`):
-
-1. **Gesture loop (~30 FPS)** — driven by MediaPipe / webcam frames. Detects gestures and **mutates** the shared state.
-2. **Render loop (~60 FPS)** — driven by `requestAnimationFrame`. **Reads** the shared state and draws the frame.
-
-```mermaid
-flowchart LR
-  Webcam([Webcam])
-  MP[MediaPipe Hands]
-  GP[gesture.js<br/>processFrame]
-  OV[overlay.js<br/>draw skeleton]
-  OC[main.js<br/>onCommand]
-  CG[cameraGestures.js<br/>orbitCamera / zoomCamera]
-  DG[drag.js<br/>DragController]
-  FC[focus.js<br/>FocusController]
-  PK[picking.js<br/>raycast + NDC]
-  ST[(Shared state<br/>camera, controls,<br/>planets)]
-  RL[main.js animate<br/>~60 FPS]
-  RE[composer.render]
-  SC([Screen])
-
-  Webcam --> MP --> GP
-  GP -- onLandmarks --> OV
-  GP -- emit cmd --> OC
-  OC -- ORBIT / ZOOM --> CG
-  OC -- DRAG_* --> DG
-  OC -- PLANET_FOCUS / FOCUS_RESET --> FC
-  DG --> PK
-  FC --> PK
-  CG --> ST
-  DG --> ST
-  FC --> ST
-  ST --> RL --> RE --> SC
-```
-
-### Command contract
-
-`gesture.js` emits `cmd` objects through the `onCommand` callback registered by `main.js`:
-
-| `cmd.state` | Payload | Routed to |
-|-------------|---------|-----------|
-| `ORBIT` | `{ dx, dy }` | `orbitCamera()` |
-| `ZOOM` | `{ zoomDelta }` | `zoomCamera()` |
-| `DRAG_START` / `DRAG` / `DRAG_END` | `{ x, y }` | `drag.onCommand(cmd)` |
-| `PLANET_FOCUS` | `{ phase, x, y }` | `focus.focusAtScreen(x, y)` (on `phase === 'start'`) |
-| `FOCUS_RESET` | — | `focus.reset()` |
-| `IDLE` | — | HUD update only |
-
-This narrow contract is the **only coupling** between gesture detection and the 3D scene — you can replace either side without touching the other.
-
----
-
-## Performance / Optimization Notes
-
-- **EMA smoothing** (`α = 0.65`) on every tracked hand coordinate cuts jitter without adding noticeable lag.
-- **Pinch hysteresis** (enter `0.060`, exit `0.115`) prevents drag/focus from flickering when fingers are at the threshold.
-- **Drag-end debounce** (`DRAG_EXIT_FRAMES = 2`) tolerates dropped MediaPipe frames without prematurely ending a drag.
-- **Dead zone** (`0.003`) filters micro-jitter in orbit/zoom deltas before emission.
-- **Reuse Three.js objects**: `Raycaster`, `Vector3`, and the focus follow-vectors are allocated once per controller and reused every frame — no per-frame garbage.
-- **Skip orbit updates for dragged planets** so they don't fight the user's hand.
-- **Order matters in `animate()`**: `focus.update()` → `controls.update()` → `composer.render()`.
-  - Focus adjusts `camera` / `controls.target`.
-  - OrbitControls then applies damping and `lookAt`.
-  - The composer pipeline (RenderPass → UnrealBloomPass → OutputPass) runs last.
-- **`requestAnimationFrame`** keeps render aligned with the display refresh and pauses on hidden tabs.
-
----
-
-## Known Limitations
-
-- **MediaPipe model assets** (`.wasm`, `.tflite`, `.binarypb`) are loaded from the jsdelivr CDN at runtime via `locateFile` — requires an internet connection on first load.
-- **Handedness can appear flipped** depending on camera and OS — flip `SWAP_HANDEDNESS` in [`src/gesture.js`](src/gesture.js) if needed.
-- **Audio autoplay** is often blocked by browsers; the BGM falls back to starting on the first `pointerdown` / `keydown`. Since this app uses only gestures, the music may not start until you click once.
-- **Webcam access** requires `localhost` or HTTPS — `file://` will fail silently.
-- **No mobile/touch input** — the app is designed for a desktop webcam.
-- Bundle is **~585 KB** minified (mostly Three.js) — fine for a demo but no code-splitting yet.
-
----
-
-## Future Improvements
-
-- Serve MediaPipe assets locally (or via service worker) for full **offline** support.
-- **Selective bloom** so only the sun glows while planets stay crisp.
-- **Saturn-style rings** for more planets, optional moons / asteroid belt.
-- Hover-style **planet info card** when focused (mass, distance, day length).
-- **Persist** custom planet positions (e.g., after drag) via `localStorage`.
-- Touchscreen / mouse fallback for environments without a webcam.
-- Migrate MediaPipe loading from CDN `<script>` injection to a proper ES-module import once the npm package ships clean ESM exports.
-
----
-
-## Team
-
-| Name | Student ID | Role |
-|------|-----------|------|
-| Trần Trung Kiên | 20233859 | 3D scene & object library |
-| Dương Văn Kiên | 20233857 | Vision & gesture recognition |
-
----
-
-## License
-
-This project is released for educational purposes as part of course **TP25216**. Add an OSS license here (e.g., MIT) if you plan to publish.
