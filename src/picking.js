@@ -13,8 +13,11 @@ export function pickPlanet(handX, handY, camera, raycaster, meshes) {
   // Dựng tia: gốc = camera, hướng = xuyên qua điểm ndc
   raycaster.setFromCamera(ndc, camera);
 
+  // Lọc bỏ các mesh đang bị ẩn (như hành tinh vừa bị nổ)
+  const visibleMeshes = meshes.filter(m => m.visible);
+
   //kiểm tra tia cắt mesh nào, trả về list hành tinh, gần nhất -> index 0
-  const hits = raycaster.intersectObjects(meshes, false);
+  const hits = raycaster.intersectObjects(visibleMeshes, false);
   if (hits.length > 0) return hits[0].object;
 
   // Không cắt trúng mesh nào → chọn mesh gần con trỏ nhất
@@ -22,7 +25,7 @@ export function pickPlanet(handX, handY, camera, raycaster, meshes) {
   const p = new THREE.Vector3();
   let best = null;
   let bestDist = THRESH;
-  for (const mesh of meshes) {
+  for (const mesh of visibleMeshes) {
     mesh.getWorldPosition(p);
     // Chiếu p (3D) sang màn hình (2D)
     p.project(camera);

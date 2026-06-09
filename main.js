@@ -38,9 +38,9 @@ function onCommand(cmd) {
       focus.reset();
       break;
 
-    case 'EXPLODE':
-      const entry = drag.getDraggedPlanet();
-      if (entry) explosionManager.explode(entry);
+    case 'EXPLODE_PREPARE':
+    case 'EXPLODE_CANCEL':
+      drag.onCommand(cmd);
       break;
   }
 }
@@ -53,6 +53,15 @@ function animate() {
   for (const p of planets) {
     if (p !== dragged) p.pivot.rotation.y += p.orbitSpeed * dt;
     p.mesh.rotation.y += p.data.selfRotation * dt;
+  }
+
+  const dragAction = drag.update(dt);
+  if (dragAction === 'TRIGGER_EXPLODE') {
+    const entry = drag.getDraggedPlanet();
+    if (entry) {
+      explosionManager.explode(entry);
+      drag.onCommand({ state: 'DRAG_END' });
+    }
   }
 
   focus.update();

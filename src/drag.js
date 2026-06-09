@@ -15,6 +15,8 @@ export function createDragController({ scene, camera, planets }) {
 
   let selected = null;
   let dragging = false;
+  let explodeTimer = 0;
+  let preparingExplode = false;
 
   function highlight(mesh, on) {
     if (mesh?.material?.emissive) {
@@ -82,9 +84,37 @@ export function createDragController({ scene, camera, planets }) {
     highlight(selected, false);
     dragging = false;
     selected = null;
+    preparingExplode = false;
+    explodeTimer = 0;
   }
 
   return {
+    update(dt) {
+      if (preparingExplode && selected) {
+        explodeTimer += dt;
+        
+        // Ép nhỏ hành tinh còn 30% trong 2 giây
+        const progress = Math.min(explodeTimer / 2.0, 1.0);
+        const scale = 1.0 - (0.7 * progress);
+        selected.scale.set(scale, scale, scale);
+        
+        if (explodeTimer >= 2.0) {
+          preparingExplode = false;
+          explodeTimer = 0;
+          selected.scale.set(1, 1, 1);
+          return 'TRIGGER_EXPLODE';
+        }
+      } else {
+        explodeTimer -= dt * 2.0; // Giảm nhanh gấp đôi nếu hủy
+        if (explodeTimer < 0) explodeTimer = 0;
+        
+        if (selected && selected.scale.x < 1.0) {
+          // Phục hồi kích thước mượt mà
+          selected.scale.lerp(new THREE.Vector3(1, 1, 1), 0.15);
+        }
+      }
+      return null;
+    },
 
     getDraggedPlanet() {
       return dragging ? planets.find(p => p.mesh === selected) : null;
@@ -94,6 +124,8 @@ export function createDragController({ scene, camera, planets }) {
         case 'DRAG_START': select(cmd.x, cmd.y); begin(); break;
         case 'DRAG':       move(cmd.x, cmd.y);             break;
         case 'DRAG_END':   end();                          break;
+        case 'EXPLODE_PREPARE': preparingExplode = true;   break;
+        case 'EXPLODE_CANCEL':  preparingExplode = false;  break;
       }
     },
   };

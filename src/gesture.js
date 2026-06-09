@@ -173,11 +173,15 @@ function handleRightHand(lm, handCount) {
   if (handCount === 1) {
     if (isFist(lm)) {
       if (pinchState.active) {
-        emit({ state: 'EXPLODE' });
-        forceEndPinch();
+        emit({ state: 'EXPLODE_PREPARE' });
       }
       return true;
     }
+    
+    if (pinchState.active) {
+      emit({ state: 'EXPLODE_CANCEL' });
+    }
+    
     const threshold = pinchState.active ? PINCH_EXIT : PINCH_ENTER;
     if (pinchDist(lm) < threshold) {
       resetOrbit();

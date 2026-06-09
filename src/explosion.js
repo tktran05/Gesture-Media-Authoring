@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import bombSoundUrl from '../assets/nuclear-bomb-explosion.mp3';
 
 export function createExplosionManager(scene, camera) {
   const explosions = [];
@@ -13,6 +14,11 @@ export function createExplosionManager(scene, camera) {
       
       // Ẩn hành tinh (Bao gồm cả vành đai và nhãn vì chúng là child của mesh)
       planetEntry.mesh.visible = false;
+      
+      // Phát âm thanh nổ
+      const sfx = new Audio(bombSoundUrl);
+      sfx.volume = 0.8;
+      sfx.play().catch(e => console.warn("Audio play blocked by browser", e));
       
       // 1. TẠO HẠT MẢNH VỠ (PARTICLES)
       const particleGeo = new THREE.BufferGeometry();
@@ -79,12 +85,12 @@ export function createExplosionManager(scene, camera) {
       scene.add(shockwave);
       
       // 3. KÍCH HOẠT RUNG CHẤN CAMERA
-      shakeTime = 0.8; // Rung lâu hơn (0.8s)
-      shakeIntensity = 5.0; // Rung chấn cực mạnh
+      shakeTime = 4.0; // Rung lâu theo âm thanh nổ (4.0s)
+      shakeIntensity = 4.0; // Rung chấn cực mạnh
       
       explosions.push({
         age: 0,
-        duration: 2.0,       // Hiệu ứng hạt tồn tại lâu hơn xíu (2.0s)
+        duration: 4.0,       // Hiệu ứng hạt tồn tại lâu hơn (4.0s)
         respawnTimer: 5.0,   // Chờ thêm 5s để phục hồi hành tinh
         planet: planetEntry,
         particles,
@@ -100,7 +106,7 @@ export function createExplosionManager(scene, camera) {
       // Chạy SAU controls.update() để đè lên vị trí chuẩn của OrbitControls
       if (shakeTime > 0) {
         shakeTime -= dt;
-        const r = shakeIntensity * (shakeTime / 0.8); // Giảm dần lực rung
+        const r = shakeIntensity * (shakeTime / 4.0); // Giảm dần lực rung trong 4s
         camera.position.x += (Math.random() - 0.5) * r;
         camera.position.y += (Math.random() - 0.5) * r;
         camera.position.z += (Math.random() - 0.5) * r;
@@ -124,10 +130,10 @@ export function createExplosionManager(scene, camera) {
           // Mờ dần theo đường cong parabol
           exp.particles.material.opacity = 1.0 - Math.pow(exp.age / exp.duration, 2);
           
-          // Cập nhật sóng xung kích (Phóng to nhanh, mờ nhanh, lan cực rộng)
-          const scale = 1.0 + exp.age * 50; 
+          // Cập nhật sóng xung kích (Phóng to liên tục, mờ chậm hơn để khớp 4s)
+          const scale = 1.0 + exp.age * 30; 
           exp.shockwave.scale.set(scale, scale, scale);
-          exp.shockwave.material.opacity = Math.max(0, 0.8 - exp.age * 2.5);
+          exp.shockwave.material.opacity = Math.max(0, 0.8 - exp.age * 0.8);
           
         } else if (!exp.cleanedUp) {
           // Xóa rác 3D khỏi bộ nhớ khi hạt bay xong
