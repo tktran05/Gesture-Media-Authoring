@@ -7,7 +7,6 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
-// ── CẤU HÌNH HÀNH TINH ────────────────
 const PLANETS = [
   { name: 'Mercury', size: 0.5,  dist: 8,  speed: 0.80, selfRotation: 0.30, initialAngle: 2.1,  texture: 'mercury.jpg', roughness: 1,    metalness: 0.02 },
   { name: 'Venus',   size: 0.9,  dist: 11, speed: 0.50, selfRotation: 0.20, initialAngle: 4.8,  texture: 'venus.jpg',   roughness: 0.6,  metalness: 0.05 },
@@ -22,7 +21,6 @@ const PLANETS = [
 const loader = new THREE.TextureLoader();
 const tex = (file) => loader.load(`/textures/${file}`);
 
-// ── DỰNG TOÀN BỘ SCENE ─────────────────────────────────────────
 export function createScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000814);
@@ -49,7 +47,6 @@ export function createScene() {
   return { scene, camera, renderer, controls, composer, planets };
 }
 
-// ── HELPERS ────────────────────────────────────────────────────
 function createRenderer() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -135,7 +132,6 @@ function addSun(scene) {
   return sun;
 }
 
-// Tạo 1 hành tinh: mesh (+ nhãn, + vành nếu có) gắn trong pivot xoay quanh mặt trời
 function createPlanet(body) {
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(body.size, 64, 64),
@@ -162,7 +158,6 @@ function createPlanet(body) {
   return { mesh, pivot, label, data: body, orbitSpeed: body.speed };
 }
 
-// Nhãn tên — Sprite tự BILLBOARD (luôn hướng camera). Ẩn sẵn, focus mới bật.
 function createLabel(body) {
   const label = new SpriteText(body.name);
   label.color      = '#ffffff';
@@ -186,7 +181,6 @@ function createRings(body) {
   return ring;
 }
 
-// Vòng quỹ đạo phẳng dưới mặt phẳng XZ; màu theo khoảng cách
 function createOrbitRing(body) {
   let color;
   if (body.dist < 20)      color = new THREE.Color(0.3, 0.6, 1.0);

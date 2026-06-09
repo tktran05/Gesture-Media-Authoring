@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { pickPlanet } from './picking.js';
 
-// Pinch tay trái → zoom vào hành tinh & bám theo. Nắm tay trái → bay về view ban đầu.
-// State đóng gói trong closure; gọi update() mỗi frame TRƯỚC controls.update().
 export function createFocusController({ camera, controls, planets }) {
   const LERP        = 0.08;   // tốc độ nội suy camera/target
   const DIST_FACTOR = 4.5;    // khoảng cách camera = bán kính hành tinh * factor
@@ -10,7 +8,6 @@ export function createFocusController({ camera, controls, planets }) {
   const raycaster   = new THREE.Raycaster();
   const selectables = planets.map(p => p.mesh);
 
-  // Snapshot view ban đầu (overview, tâm = mặt trời)
   const initialCamPos = camera.position.clone();
   const initialTarget = controls.target.clone();
 
@@ -24,7 +21,6 @@ export function createFocusController({ camera, controls, planets }) {
   let resetting = false;  // đang bay về view ban đầu
   let visibleLabel = null;
 
-  // Chỉ 1 nhãn hiện mỗi lúc; reset (mesh=null) ẩn hết
   function showLabel(mesh) {
     if (visibleLabel) visibleLabel.visible = false;
     const entry = planets.find(p => p.mesh === mesh);
@@ -55,8 +51,6 @@ export function createFocusController({ camera, controls, planets }) {
     }
   }
 
-  // Dời camera + target đúng bằng quãng hành tinh đã đi → giữ nguyên góc orbit
-  // & khoảng cách zoom của người dùng, hành tinh luôn ở tâm khi nó chạy quỹ đạo.
   function follow() {
     moveDelta.copy(targetPos).sub(prevPos);
     camera.position.add(moveDelta);
@@ -65,13 +59,11 @@ export function createFocusController({ camera, controls, planets }) {
   }
 
   return {
-    // Pinch tay trái (frame đầu): raycast chọn hành tinh để focus
     focusAtScreen(handX, handY) {
       const mesh = pickPlanet(handX, handY, camera, raycaster, selectables);
       if (mesh) enter(mesh);
     },
 
-    // Nắm tay trái → bay về view ban đầu
     reset() {
       focused   = null;
       ready     = false;
@@ -79,7 +71,6 @@ export function createFocusController({ camera, controls, planets }) {
       showLabel(null);
     },
 
-    // Gọi mỗi frame trong render loop, TRƯỚC controls.update()
     update() {
       if (resetting) {
         controls.target.lerp(initialTarget, LERP);

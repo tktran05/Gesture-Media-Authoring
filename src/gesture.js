@@ -14,7 +14,6 @@ const DRAG_EXIT_FRAMES = 2; // số frame không-pinch liên tiếp để kết 
 // nhãn bị đảo so với tay thật → swap. Nếu thấy ngược (tay PHẢI focus), đổi false.
 const SWAP_HANDEDNESS = true;
 
-// ── MATH / DETECTORS ───────────────────────────────────────────
 function dist(lm, a, b) {
   return Math.hypot(lm[a].x - lm[b].x, lm[a].y - lm[b].y);
 }
@@ -50,7 +49,6 @@ function handLabel(entry) {
   return SWAP_HANDEDNESS ? (raw === 'Left' ? 'Right' : 'Left') : raw;
 }
 
-// ── STATE ──────────────────────────────────────────────────────
 const orbitState = { prevX: null, prevY: null, smoothX: null, smoothY: null };
 const zoomState  = { prevDist: null, smoothDist: null };
 const pinchState = { active: false, exitCount: 0, smoothX: null, smoothY: null }; // drag
@@ -80,13 +78,11 @@ function resetAll() {
   resetFocusPinch();
 }
 
-// ── COMMAND EMISSION ───────────────────────────────────────────
 let onCommand   = () => {};
 let onLandmarks = () => {};
 function emit(cmd) { onCommand(cmd); }        // ≡ main.onCommand({state:'ORBIT', dx:0.012, dy:-0.003})
 
 
-// ── GESTURE HANDLERS (mỗi cái cập nhật state + emit lệnh) ──────
 function handleOrbit(lm) {
   const s = orbitState;
   s.smoothX = ema(s.smoothX, lm[9].x);
@@ -134,7 +130,6 @@ function tryEndPinch() {
   if (pinchState.exitCount >= DRAG_EXIT_FRAMES) forceEndPinch();
 }
 
-// ── ROUTING THEO TỪNG NHÓM CỬ CHỈ (trả true nếu đã xử lý xong frame) ──
 function handleTwoHandZoom(hands) {
   if (pinchDist(hands[0]) >= PINCH_EXIT || pinchDist(hands[1]) >= PINCH_EXIT) return false;
 
@@ -175,17 +170,25 @@ function handleLeftHand(lm) {
 
 function handleRightHand(lm, handCount) {
   resetFocusPinch();
-  const threshold = pinchState.active ? PINCH_EXIT : PINCH_ENTER;
-  if (handCount === 1 && pinchDist(lm) < threshold) {
-    resetOrbit();
-    handlePinch(lm);
-    return true;
+  if (handCount === 1) {
+    if (isFist(lm)) {
+      if (pinchState.active) {
+        emit({ state: 'EXPLODE' });
+        forceEndPinch();
+      }
+      return true;
+    }
+    const threshold = pinchState.active ? PINCH_EXIT : PINCH_ENTER;
+    if (pinchDist(lm) < threshold) {
+      resetOrbit();
+      handlePinch(lm);
+      return true;
+    }
   }
   tryEndPinch();
   return false;
 }
 
-// ── PROCESS FRAME (luồng cử chỉ chính, đọc từ trên xuống) ──────
 function processFrame(results) {
   const hands = results.multiHandLandmarks ?? [];
   onLandmarks(hands);
@@ -219,7 +222,6 @@ function processFrame(results) {
   if (!pinchState.active) emit({ state: 'IDLE' });
 }
 
-// ── SETUP ──────────────────────────────────────────────────────
 export async function setupGesture(videoEl, handlers = {}) {
   onCommand   = handlers.onCommand   ?? (() => {});
   onLandmarks = handlers.onLandmarks ?? (() => {});
